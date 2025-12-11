@@ -1,47 +1,30 @@
-version: '3.8'
+# Для PostgreSQL 17.6
+FROM postgres:17-alpine
 
-services:
-  postgres:
-    build: ./db
-    container_name: autodb_postgres
-    environment:
-      POSTGRES_DB: autodb
-      POSTGRES_USER: admin
-      POSTGRES_PASSWORD: secure_password_123
-      POSTGRES_INITDB_ARGS: "--encoding=UTF8 --locale=C"
-    ports:
-      - "5433:5432"
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
-      - ./db/init.sql:/docker-entrypoint-initdb.d/init.sql
-    networks:
-      - app-network
-    restart: unless-stopped
+# Установка дополнительных пакетов (опционально)
+RUN apk add --no-cache \
+    tzdata \
+    postgresql-contrib
 
-  flask-app:
-    build: ./app
-    container_name: autodb_flask
-    environment:
-      DB_HOST: postgres
-      DB_PORT: 5433
-      DB_NAME: autodb
-      FLASK_ENV: production
-      SECRET_KEY: ${SECRET_KEY:-your-secret-key-here}
-    ports:
-      - "5000:5000"
-    depends_on:
-      - postgres
-    networks:
-      - app-network
-    restart: unless-stopped
-    volumes:
-      - ./app/templates:/app/templates
-      - ./app/static:/app/static
+# Устанавливаем локаль
+ENV LANG ru_RU.UTF-8
+ENV LC_ALL ru_RU.UTF-8
+ENV TZ Europe/Moscow
 
-networks:
-  app-network:
-    driver: bridge
+# Копируем backup
+COPY backup.sql /docker-entrypoint-initdb.d/
 
-volumes:
-  postgres_data:
-    driver: local
+# Можно также выполнить скрипт после инициализации
+COPY post-init.sh /docker-entrypoint-initdb.d/
+
+# Настройки производительности
+RUN echo "shared_buffers = 256MB" >> /usr/share/postgresql/postgresql.conf.sample && \
+    echo "max_connections = 200" >> /usr/share/postgresql/postgresql.conf.sample && \
+    echo "listen_addresses = '*'" >> /usr/share/postgresql/postgresql.conf.sample
+
+# Права на выполнение скриптов
+RUN chmod +x /docker-entrypoint-initdb.d/*.sh 2>/dev/null || true
+
+EXPOSE 5432
+
+CMD ["postgres"]
