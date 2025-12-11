@@ -1,0 +1,47 @@
+version: '3.8'
+
+services:
+  postgres:
+    build: ./db
+    container_name: autodb_postgres
+    environment:
+      POSTGRES_DB: autodb
+      POSTGRES_USER: admin
+      POSTGRES_PASSWORD: secure_password_123
+      POSTGRES_INITDB_ARGS: "--encoding=UTF8 --locale=C"
+    ports:
+      - "5433:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./db/init.sql:/docker-entrypoint-initdb.d/init.sql
+    networks:
+      - app-network
+    restart: unless-stopped
+
+  flask-app:
+    build: ./app
+    container_name: autodb_flask
+    environment:
+      DB_HOST: postgres
+      DB_PORT: 5433
+      DB_NAME: autodb
+      FLASK_ENV: production
+      SECRET_KEY: ${SECRET_KEY:-your-secret-key-here}
+    ports:
+      - "5000:5000"
+    depends_on:
+      - postgres
+    networks:
+      - app-network
+    restart: unless-stopped
+    volumes:
+      - ./app/templates:/app/templates
+      - ./app/static:/app/static
+
+networks:
+  app-network:
+    driver: bridge
+
+volumes:
+  postgres_data:
+    driver: local
